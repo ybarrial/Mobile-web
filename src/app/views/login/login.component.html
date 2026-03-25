@@ -7,22 +7,19 @@
     <div class="spinner"></div>
     <div class="glow"></div>
   </div>
+  <img src="assets/images/login/logo-login.png"/>
   <div class="login-form">
-    <img src="assets/images/brand/logo-regina-billing-small.png" />
-    <form *ngIf="windowForm == 0">
-      <div class="input-container" style="padding-top: 20px !important;">
-        <i class="fas fa-user" style="padding-top: 20px !important"></i>
-        <input type="text" placeholder="Usuario" [(ngModel)]="dtoUser.userUsername" name="username" required
-          #usernameInput="ngModel" class="form-control input-all"/>
+    <form [formGroup]="formUsuario" *ngIf="windowForm == 0" style="align-items: center; margin-bottom: 15%;">
+      <div class="input-container">
+        <i class="fas fa-user"></i>
+        <input type="text" formControlName="usuario" placeholder="Usuario" name="username" required class="form-control input-all"/>
       </div>
       <div class="form-group">
-        <label for="password" class="form-label">Contraseña</label>
         <div class="input-container">
           <i class="fas fa-lock"></i>
-          <input [type]="showPassword ? 'text' : 'password'" name="password" id="password" [(ngModel)]="dtoUser.userPassword"
-            class="form-control input-all" placeholder="Contraseña" required #passwordInput="ngModel">
-          
-            <button type="button" class="password-toggle" (click)="togglePasswordVisibility()">
+          <input [type]="showPassword ? 'text' : 'password'" class="form-control input-all" name="password" id="password" formControlName="password"
+            placeholder="Contraseña" required>
+            <button type="button" class="password-toggle" (click)="togglePasswordVisibility()" title="showPassword">
             <div class="icono">
               <i [class]="showPassword ? 'fas fa-eye' : 'fas fa-eye-slash'"></i>
             </div>
@@ -32,28 +29,48 @@
 
 
       <div class="btn-casa-container">
-        <button *ngIf="!pendingOk" type="button" class="btn btn-primary btn-sm boton-inicio" [disabled]="pendingOk" (click)="onLogin()">
+        <button type="button" class="btn btn-primary btn-sm boton-inicio" (click)="login()">
           <i class="fas fa-sign-in"></i>  Iniciar Sesión</button>
-        <span *ngIf="pendingOk" class="spinner-border spinner-border-sm" aria-hidden="true"></span>
-        <span *ngIf="pendingOk" role="status"> Enviando...</span>
+        <!-- <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+        <span role="status"> Enviando...</span> -->
       </div>
     </form>
 
-    <form *ngIf="windowForm == 1">
-      <p style="margin-top: 30px;">Ingrese el código de 4 dígitos enviado<br />
-        a su correo</p>
-      <div class="row">
-        <div class="col-12 text-center">
-          <div class="otp-inputs text-center">
-            <input type="text" name="valor1" maxlength="1" [(ngModel)]="valor1" (input)="moveToNext($event, 1)" />
-            <input type="text" name="valor2" maxlength="1" [(ngModel)]="valor2" (input)="moveToNext($event, 2)" />
-            <input type="text" name="valor3" maxlength="1" [(ngModel)]="valor3" (input)="moveToNext($event, 3)" />
-            <input type="text" name="valor4" maxlength="1" [(ngModel)]="valor4" (input)="moveToNext($event, 4)" />
-          </div>
-          <button class="btn-casa" type="button" *ngIf="showButtonOTP" (click)="onOtp()"><i
-              class="fas fa-passport"></i>&nbsp;&nbsp;Validar Código</button>
-        </div>
+    <form [formGroup]="formEmpresa" *ngIf="windowForm == 1" style="align-items: center; margin-bottom: 10%;">
+      <div class="form-group">
+        <select class="general-select" style="width: 67.6%; margin: 4px 0 0 0; height: 40px !important;" id="inputGroupSelect01"
+          title="Empresa" (change)="actualizarSede()" formControlName="empresa" [attr.disabled]="!isValid ? '' : null">
+          <option value="" disabled>Seleccione una empresa</option>
+          <option *ngFor="let empresa of empresas" [value]="empresa.id">
+            {{empresa.razonsocial}}
+          </option>
+        </select>
+
+        <select class="general-select" style="width: 67.6%; margin: 5px 0 4px 0; height: 40px !important;" id="inputGroupSelect02" 
+          title="Sede" (change)="onSedeSeleccionada()" formControlName="sede" [attr.disabled]="!isValid ? '' : null">
+          <option value="" disabled>Seleccione una empresa</option>
+          <option *ngFor="let sede of sedes" [value]="sede.codsede">
+            {{sede.descripcion}}</option>
+        </select>
+      </div>
+
+      <div class="btn-casa-container">
+        <button type="button" class="btn btn-primary btn-sm boton-inicio" (click)="login2()">
+          <i class="fas fa-sign-in"></i>  Iniciar Sesión</button>
+        <!-- <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+        <span role="status"> Enviando...</span> -->
       </div>
     </form>
+  </div>
+</div>
+<div class="marquee-header">
+  <h6>Nuestros Productos...</h6>
+  <hr />
+</div>
+<div class="video-marquee">
+  <!-- CABECERA -->
+  <!-- VIDEO -->
+  <div class="video-wrapper">
+    <video #videoPlayer autoplay muted playsinline></video>
   </div>
 </div>

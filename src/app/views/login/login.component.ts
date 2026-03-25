@@ -1,52 +1,68 @@
 import { CommonModule } from '@angular/common';
-import { Component, CUSTOM_ELEMENTS_SCHEMA, OnDestroy, OnInit } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { Component, CUSTOM_ELEMENTS_SCHEMA, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
-import { AuthService } from "./../../services/auth.service";
-import Swal from 'sweetalert2';
-import { Response } from '../../models/response';
-import { environment } from '../../../environments/environment';
-import { RegSecUser } from '../../models/reg-sec-user';
-import { MaeTipoCambio } from '../../models/mae-tipo-cambio';
 import { MaestrosService } from '../../services/maestros.service';
+import { AuthService } from '../../services/mobile-web/auth.service';
+import { Usuario } from '../../models/mobile-web/usuario';
+import { AppComponent } from '../../app.component';
+import { Empresa } from '../../models/mobile-web/empresa';
+import { Sede } from '../../models/mobile-web/sede';
+import { EmpresaService } from '../../services/mobile-web/empresa.service';
+import { SedeService } from '../../services/mobile-web/sede.service';
+import Swal from 'sweetalert2';
 
 @Component({
   selector: 'app-login',
   standalone: true,
   templateUrl: './login.component.html',
   styleUrls: ['./login.component.scss'],
-  imports: [FormsModule, CommonModule],
+  imports: [ReactiveFormsModule, CommonModule,],
   schemas: [CUSTOM_ELEMENTS_SCHEMA]
 })
 export class LoginComponent implements OnInit, OnDestroy {
-  authToken: string = "";
-  username: string = ''; // Cambiado de email a username
-  password: string = '';
-  showPassword: boolean = false;
-  errorMessage: string = '';
+
+  formUsuario!: FormGroup;
+  formEmpresa!: FormGroup;
+  
   windowForm: number = 0;
-  valor1: string = '';
-  valor2: string = '';
-  valor3: string = '';
-  valor4: string = '';
-  otp: string = "";
-  showButtonOTP: boolean = false;
-  showButtonPeriodo: boolean = false;
-  pendingOk: boolean = false;
-  dtoUser: RegSecUser = new RegSecUser();
-  selectedYear: string = "";
-  selectedMonth: string = "";
-  tiposCambio: MaeTipoCambio[] = [];
+  currentIndex: number = 0;
 
-  constructor(private router: Router, private service: AuthService, private maestrosService: MaestrosService) {
-    this.selectedYear = (new Date().getFullYear()).toString();
-    this.selectedMonth = (new Date().getMonth() + 1).toString().padStart(2, '0');
-    sessionStorage.setItem('periodo_month', this.selectedMonth);
-    sessionStorage.setItem('periodo_year', this.selectedYear);
-    sessionStorage.setItem('codempresa', '0001');
+  showPassword: boolean = false;
+  isDisabled: boolean = false;
+  isValid: boolean = false;
 
+  valorText: string = "Validar";
+
+  empresas: Empresa[] = [];
+  sedes: Sede[] = [];
+
+  usuarioLogeado: Usuario = new Usuario;
+
+  videos: string[] = [
+    'assets/videos/regina.mp4',
+    'assets/videos/regina.mp4',
+    'assets/videos/regina.mp4',
+    'assets/videos/regina.mp4',
+    'assets/videos/regina.mp4'
+  ];
+
+  @ViewChild('videoPlayer') video!: ElementRef<HTMLVideoElement>;
+
+  constructor(
+    private router: Router,
+    private service: AuthService,
+    private formBuilder: FormBuilder,
+    private maestrosService: MaestrosService,
+    //private exchangeRateService: ExchangeRateService
+
+
+    private authService: AuthService,
+    private appts: AppComponent,
+    private sedeService: SedeService,
+    private empresaService: EmpresaService
+  ) {
     if (sessionStorage.getItem('isLoggedIn') === 'true') {
-      // Redirige al Dashboard si la sesión está activa
       this.router.navigate(['/dashboard']);
     } else {
       this.router.navigate(['/login']);
@@ -55,20 +71,110 @@ export class LoginComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     document.documentElement.style.overflow = 'hidden';
-    this.getTiposCambio();
+    this.onbuildFormUsuario();
+    this.onBuildFormEmpresa();
+    if (this.authService.isAuthenticated()) {
+      //this.router.navigate(['/Principal']);
+      this.router.navigate(['/home']);
+    }
+  }
+
+  ngAfterViewInit() {
+    const videoEl = this.video.nativeElement;
+    videoEl.muted = true; // 🔇 sin audio siempre
+    videoEl.src = this.videos[this.currentIndex];
+    videoEl.load();
+    videoEl.play();
+
+    videoEl.onended = () => {
+      this.nextVideo();
+    };
   }
 
   ngOnDestroy(): void {
     document.documentElement.style.overflow = '';
   }
 
+  onbuildFormUsuario() {
+    this.formUsuario = this.formBuilder.group({
+      usuario: ['', Validators.required],
+      password: ['', Validators.required]
+    });
+  }
+
+  nextVideo() {
+    this.currentIndex = (this.currentIndex + 1) % this.videos.length;
+    const videoEl = this.video.nativeElement;
+    videoEl.src = this.videos[this.currentIndex];
+    videoEl.load();
+    videoEl.play();
+  }
+
+  playVideo() {
+    const videoEl = this.video.nativeElement;
+    videoEl.src = this.videos[this.currentIndex];
+    videoEl.load();
+    videoEl.play();
+  }
+
+  onBuildFormEmpresa() {
+    this.formEmpresa = this.formBuilder.group({
+      empresa: ['', Validators.required],
+      sede: ['', Validators.required]
+    })
+  }
+
   togglePasswordVisibility() {
-    this.showPassword = !this.showPassword; // Alterna el estado
+    this.showPassword = !this.showPassword;
+  }
+
+  login() {
+    if (this.valida_login()) {
+      if (this.valorText == "Validar") {
+        this.authService.login(this.formUsuario.value)
+          .subscribe((response) => {
+            this.valorText = "Ingresar"
+            this.windowForm = 1;
+            this.isDisabled = true;
+            sessionStorage.setItem('codusuario', JSON.stringify(this.formUsuario.controls['usuario'].value));
+            this.authService.guardarUsuario(response);
+            this.authService.guardarToken(response.access_token);
+            this.usuarioLogeado = this.authService.usuario!;
+
+            const codusuario = JSON.parse(sessionStorage.getItem('codusuario') || '""');
+
+            if (codusuario == 'ADMIN') {
+              sessionStorage.setItem('empresaNombre', '');
+              sessionStorage.setItem('nombre_usuario', JSON.stringify('ADMINISTRADOR'));
+              sessionStorage.setItem('empresa', '0');
+              sessionStorage.setItem('sedeNombre', '');
+              sessionStorage.setItem('sede', '0');
+              this.appts.accessMenu(this.usuarioLogeado);
+              this.appts.getUsuario(this.usuarioLogeado);
+              this.appts.login();
+              //this.router.navigate(['/Principal']);
+              this.router.navigate(['/home']);
+            } else {
+              this.onlistEmpresas();
+            }
+          }, () => {
+            Swal.fire('Error Login', 'Usuario o clave incorrectas!', 'error');
+          });
+      }
+    }  
+  }
+
+  get usuario(): string {
+    return this.formUsuario.controls['usuario'].value;
+  }
+
+  get contrasena(): string {
+    return this.formUsuario.controls['password'].value;
   }
 
   valida_login(): boolean {
-    if ((this.dtoUser.userUsername == undefined || this.dtoUser.userUsername == null || this.dtoUser.userUsername.length < 3)
-      || (this.dtoUser.userPassword == undefined || this.dtoUser.userPassword == null || this.dtoUser.userPassword == '')) {
+    if ((this.usuario == undefined || this.usuario == null || this.usuario.length < 3)
+      || (this.contrasena == undefined || this.contrasena == null || this.contrasena == '')) {
       Swal.fire({
         title: 'Error!',
         text: "Debe ingresar credenciales de autenticación",
@@ -81,123 +187,51 @@ export class LoginComponent implements OnInit, OnDestroy {
     }
   }
 
-  onLogin() {
-    if (this.valida_login()) {
-      this.pendingOk = !this.pendingOk;
-      this.dtoUser.codEmpresa = '0001';
-      this.dtoUser.codSucursal = '001';
-      this.service.login(this.dtoUser).subscribe(
-        (response: Response) => {
-          if (response.error == 0) {
-            if (response.resultado == undefined || response.resultado == null || response.resultado.length == 0) {
-              this.windowForm = 1;
-              this.onOtp();
-            } else {
-              this.dtoUser = response.resultado;
-              this.authToken = this.dtoUser.authToken;
-              sessionStorage.setItem('isLoggedIn', 'true');
-              sessionStorage.setItem('authToken', this.authToken);
-              sessionStorage.setItem('user', JSON.stringify(response.resultado));
-              this.windowForm = 2;
-              this.onIngresar();
-            }
-            this.pendingOk = false;
-          } else {
-            Swal.fire({
-              title: 'Error!',
-              text: "Credenciales Incorrectas",
-              icon: 'error',
-              confirmButtonText: 'Intentar de nuevo'
-            })
-            this.pendingOk = false;
-          }
-        },
-        error => {
-          Swal.fire({
-            title: 'Error!',
-            text: "Error en el Servicio de Autenticación ",
-            icon: 'error',
-            confirmButtonText: 'Intentar de nuevo'
-          });
-          this.pendingOk = false;
-        }
-      )
+  login2() {
+    if (this.valorText == "Ingresar") {
+      this.guardar();
+      //this.appts.accessMenu(this.usuarioLogeado);
+      this.appts.getUsuario(this.usuarioLogeado);
+      this.appts.login();
+      this.router.navigate(['/home']);
     }
   }
 
-  onOtp() {
-    this.service.otp(this.dtoUser).subscribe(
-      (response: Response) => {
-        if (response.error == 0) {
-          this.dtoUser = response.resultado;
-          this.authToken = this.dtoUser.authToken;
-          sessionStorage.setItem('isLoggedIn', 'true');
-          sessionStorage.setItem('authToken', this.authToken);
-          sessionStorage.setItem('user', JSON.stringify(response.resultado));
-          this.onIngresar();
-        } else {
-          Swal.fire({
-            title: 'Error!',
-            text: "Error en el Envío de Email",
-            icon: 'error',
-            confirmButtonText: 'Intentar de nuevo'
-          })
-        }
-      },
-      error => {
-        Swal.fire({
-          title: 'Error!',
-          text: "Error en el Servicio de Autenticación",
-          icon: 'error',
-          confirmButtonText: 'Intentar de nuevo'
-        })
+  actualizarSede() {
+    var id = this.formEmpresa.controls['empresa'].value;
+    var userid = JSON.parse(sessionStorage.getItem('codusuario') || '""');
+    this.sedes = [];
+    this.sedeService.getSedesByEmpresaByUser(id, userid)
+      .subscribe(response => {
+        this.sedes = response;
+      });
+  }
+
+  onSedeSeleccionada() {
+    this.isDisabled = false;
+  }
+
+  onlistEmpresas() {
+    this.empresas = [];
+    this.empresaService.getEmpresaListadoActivos()
+      .subscribe(rpta => {
+        this.empresas = rpta;
+      });
+  }
+
+  guardar() {
+    for (let empresa of this.empresas) {
+      if (this.formEmpresa.controls['empresa'].value == empresa.id) {
+        sessionStorage.setItem('empresaNombre', empresa.razonsocial!);
+        sessionStorage.setItem('empresa', empresa.id!.toString());
       }
-    )
-  }
-
-  onIngresar() {
-        sessionStorage.setItem('periodo_month', this.selectedMonth.toString().padStart(2, '0'));
-    sessionStorage.setItem('periodo_year', this.selectedYear.toString().padStart(4, '0'));
-    this.router.navigate(['/home']);
-    this.getConfiguracionSistema();
-  }
-
-  moveToNext(event: Event, index: number): void {
-    const input = event.target as HTMLInputElement;
-    if (input.value.length === 1 && index < 4) {
-      (document.getElementsByTagName('input')[index] as HTMLInputElement).focus();
     }
-    this.otp = (this.valor1.concat(this.valor2).concat(this.valor3).concat(this.valor4)).trimEnd();
-    if (this.otp.length == 4) {
-      this.showButtonOTP = true;
-    } else {
-      this.showButtonOTP = false;
-    }
-  }
-
-  getLastDayOfMonth(year: number, month: number): Date {
-    return new Date(year, month + 1, 0);
-  }
-
-  getConfiguracionSistema(): void {
-  }
-
-  getTiposCambio(): void {
-    this.maestrosService.getTiposCambio().subscribe(
-      (response: Response) => {
-        this.tiposCambio = response.resultado || [];
-        if (this.tiposCambio.length > 0) {
-          sessionStorage.setItem('tipocambio', JSON.stringify(this.tiposCambio[0]));
-        } else {
-          let tipoCambio = new MaeTipoCambio();
-          tipoCambio.impVenta = 0;
-          tipoCambio.impCompra = 0;
-          sessionStorage.setItem('tipocambio', JSON.stringify(tipoCambio));
-        }
-      },
-      (error) => {
-        console.error('Error al cargar tipos de cambio', error);
+    for (let sede of this.sedes) {
+      if (this.formEmpresa.controls['sede'].value == sede.codsede) {
+        sessionStorage.setItem('sedeNombre', sede.descripcion!);
+        sessionStorage.setItem('sede', sede.codsede!);
       }
-    );
+    }
   }
+
 }
